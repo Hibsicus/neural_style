@@ -33,6 +33,12 @@ style_weight = 1e4
 tv_weight = 1e-3
 temporal_weight = 2e2
 
+img_output_dir = 'D:'
+img_name = "test"
+
+noise_ratio = 1.0
+
+
 #'adam'
 optimizer = 'lbfgs'
 
@@ -385,11 +391,31 @@ def get_optimizer(loss):
     return opt
 
 def write_image_output(output_img, content_img, style_imgs, init_img):
-    pass
+    out_dir = os.path.join(img_output_dir, img_name)
+    make_directory(out_dir)
+    img_path = os.path.join(out_dir, img_name + '.png')
+    content_path = os.path.join(out_dir, 'content.png')
+    init_path = os.path.join(out_dir, 'init.png')
+    
+    write_image(img_path, output_img)
+    write_image(content_path, content_img)
+    write_image(init_path, init_img)
+    index = 0
+    for style_img in style_imgs:
+        path = os.path.join(out_dir, 'style_' + str(index) + '.png')
+        write_image(path, style_img)
+        index += 1
+
+def get_init_image(init_type, content_img, style_imgs, frame=None):
+    if init_type == 'content':
+        return content_img
+    elif init_type == 'style':
+        return style_imgs[0]
+    elif init_type == 'random':
+        return get_noise_image(noise_ratio, content_img)
+    
 
 
-        
-        
 
 
     
