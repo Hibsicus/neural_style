@@ -8,17 +8,26 @@ import time
 import os
 import cv2
 
+#'/gpu:0' /cpu:0 ...
+device = '/cpu:0'
+
 #'max'
 pool_args = 'avg'
 #1, 2, 3
 content_loss_function = 1
-style_imgs_weights = [1.0]
 style_mask_imgs = None
 content_layers = ['conv4_2']
 style_layers = ['relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1']
+
+global content_layer_weights
 content_layer_weights = [1.0]
+
+global style_layer_weights
 style_layer_weights = [0.2, 0.2, 0.2, 0.2, 0.2]
-prev_frame_indices = [1]
+
+global style_imgs_weights
+style_imgs_weights = [1.0]
+
 model_weights = 'imagenet-vgg-verydeep-19.mat'
 style_mask = False
 
@@ -42,7 +51,7 @@ noise_ratio = 1.0
 
 max_size = 512
 #array
-style_imgs_name = 'xxx.jpg'
+style_imgs_name = ['xxx.jpg']
 style_imgs_dir = 'D:'
 
 #'adam'
@@ -56,15 +65,18 @@ color_convert_type = 'yuv'
 #['random', 'content', 'style']
 init_img_type = 'content'
 
-content_weights_frmt = 'reliable_{}_{}.txt'
-forward_optical_flow_frmt = 'forward_{}_{}.flo'
-backward_optical_flow_frmt = 'backward_{}_{}.flo'
-content_frame_frmt = 'frame_{}.ppm'
+#content_weights_frmt = 'reliable_{}_{}.txt'
+#forward_optical_flow_frmt = 'forward_{}_{}.flo'
+#backward_optical_flow_frmt = 'backward_{}_{}.flo'
+#content_frame_frmt = 'frame_{}.ppm'
 
-def handleParameter():
+def handleParameter(): 
+    global style_layer_weights
     style_layer_weights = normalize(style_layer_weights)
-    content_layer_weights = normalize(content_layer_weights)
-    style_imgs_weights = normalize(style_imgs_weights)
+    global content_layer_weights
+    content_layer_weights= normalize(content_layer_weights)
+    global style_imgs_weights
+    style_imgs_weights= normalize(style_imgs_weights)
     
     make_directory(img_output_dir)
 
@@ -187,7 +199,7 @@ def style_layer_loss(a, x):
     N = d.value
     A = gram_matrix(a, M, N)
     G = gram_matrix(x, M, N)
-    loss = (1. / (4. * N**2 * M**2)) * tf.reduce_sum(tf.pow((G - A), 2))
+    loss = (1. / (4 * N**2 * M**2)) * tf.reduce_sum(tf.pow((G - A), 2))
     return loss
 
 def gram_matrix(x, area, depth):
@@ -276,7 +288,7 @@ def postprocess(img):
     img += np.array([123.68, 116.779, 103.939]).reshape((1, 1, 1, 3))
     img = img[0]
     img = np.clip(img, 0, 255).astype('uint8')
-    img = img[...,::,-1]
+    img = img[...,::-1]
     return img
 
 def read_flow_file(path):
@@ -322,13 +334,13 @@ def check_image(img, path):
         
         
 def stylize(content_img, style_imgs, init_img, frame=None):
-    with tf.Session() as sess:
+    with tf.device(device), tf.Session() as sess:
         net = build_model(content_img)
         
         if style_mask:
             L_style = sum_masked_style_losses(sess, net, style_imgs)
         else:
-            L_style = sum_style_losses(sess, net, content_img)
+            L_style = sum_style_losses(sess, net, style_imgs)
             
         L_content = sum_content_losses(sess, net, content_img)
         L_tv = tf.image.total_variation(net['input'])
@@ -498,7 +510,12 @@ def render_single_image():
         tick = time.time()
         stylize(content_img, style_imgs, init_img)
         tock = time.time()
-        
+
+def checkPath():
+    if len(style_imgs_name) > 0 and style_imgs_dir and  content_img_dir and content_img_name and img_output_dir:
+        return True
+    return False
+
 def main():
     handleParameter()
     render_single_image()
