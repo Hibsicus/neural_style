@@ -35,12 +35,38 @@ temporal_weight = 2e2
 
 img_output_dir = 'D:'
 img_name = "test"
+content_img_dir = 'D:'
+content_img_name = 'name.png'
 
 noise_ratio = 1.0
 
+max_size = 512
+#array
+style_imgs_name = 'xxx.jpg'
+style_imgs_dir = 'D:'
 
 #'adam'
 optimizer = 'lbfgs'
+
+seed = 0
+
+#['yuv', 'ycrcb', 'luv', 'lab']
+color_convert_type = 'yuv'
+
+#['random', 'content', 'style']
+init_img_type = 'content'
+
+content_weights_frmt = 'reliable_{}_{}.txt'
+forward_optical_flow_frmt = 'forward_{}_{}.flo'
+backward_optical_flow_frmt = 'backward_{}_{}.flo'
+content_frame_frmt = 'frame_{}.ppm'
+
+def handleParameter():
+    style_layer_weights = normalize(style_layer_weights)
+    content_layer_weights = normalize(content_layer_weights)
+    style_imgs_weights = normalize(style_imgs_weights)
+    
+    make_directory(img_output_dir)
 
 def build_model(input_img):
     net = {}
@@ -51,19 +77,19 @@ def build_model(input_img):
     net['input'] = tf.Variable(np.zeros((1, h, w, d), dtype=np.float32))
     
     #Layer Group 1
-    net['conv1_1'] = conv_layer('conv1_1', net['input']. W = get_widgets(vgg_layers, 0))
+    net['conv1_1'] = conv_layer('conv1_1', net['input'], W = get_weights(vgg_layers, 0))
     net['relu1_1'] = relu_layer('relu1_1', net['conv1_1'], b = get_bias(vgg_layers, 0))
     
-    net['conv1_2'] = conv_layer('conv1_2', net['relu1_1'], W = get_widgets(vgg_layers, 2))
+    net['conv1_2'] = conv_layer('conv1_2', net['relu1_1'], W = get_weights(vgg_layers, 2))
     net['relu1_2'] = relu_layer('relu1_2', net['conv1_2'], b = get_bias(vgg_layers, 2))
     
     net['pool1'] = pool_layer('pool1', net['relu1_2'])
     
     #Layer Group 2
-    net['conv2_1'] = conv_layer('conv_2_1', net['pool1'], W = get_widgets(vgg_layers, 5))
+    net['conv2_1'] = conv_layer('conv_2_1', net['pool1'], W = get_weights(vgg_layers, 5))
     net['relu2_1'] = relu_layer('relu2_1', net['conv2_1'], b = get_bias(vgg_layers, 5))
     
-    net['conv2_2'] = conv_layer('conv_2_2', net['relu2_1'], W = get_widgets(vgg_layers, 7))
+    net['conv2_2'] = conv_layer('conv_2_2', net['relu2_1'], W = get_weights(vgg_layers, 7))
     net['relu2_2'] = relu_layer('relu2_2', net['conv2_2'], b = get_bias(vgg_layers, 7))
 
     net['pool2'] = pool_layer('pool2', net['relu2_2'])
@@ -132,7 +158,7 @@ def pool_layer(layer_name, layer_input):
                               strides=[1, 2, 2, 1], padding='SAME')
     return pool
 
-def get_widgets(vgg_layers, i):
+def get_weights(vgg_layers, i):
     weights = vgg_layers[i][0][0][2][0][0]
     W = tf.constant(weights)
     return W
@@ -228,39 +254,6 @@ def sum_content_losses(sess, net, content_img):
     content_loss /= float(len(content_layers))
     return content_loss
 
-def temporal_loss(x, w, c):
-    c = c[np.newaxis, :, :,:]
-    D = float(x.size)
-    loss = (1. / D) * tf.reduce_sum(c * tf.nn.l2_loss(x - w))
-    loss = tf.cast(loss, tf.float32)
-    return loss
-
-def get_longterm_weights(i, j):
-    c_sum = 0.
-    for k in range(prev_frame_indices):
-        if i - l > i - j:
-            c_sum += get_content_weights(i, i - k)
-    c = get_content_weights(i, i - j)
-    c_max = tf.maximum(c - c_sum, 0.)
-    return c_max
-
-def sum_longterm_temporal_losses(sess, net, frame, input_img):
-    x = sess.run(net['input'].assign(input_img))
-    loss = 0.
-    for j in range(prev_frame_indices):
-        prev_frame = frame - j
-        w = get_prev_warped_frame(frame)
-        c = get_longterm_weights(frame, prev_frame)
-        loss += temporal_loss(x, w, c)
-    return loss
-
-def sum_shortterm_temporal_losses(sess, net, frame, input_img):
-    x = sess.run(net['input'].assign(input_img))
-    prev_frame = frame - 1
-    w = get_prev_warped_frame(frame)
-    c = get_content_weights(frame, prev_frame)
-    loss = temporal_loss(x, w, c)
-    return loss
 
 def read_image(path):
     img = cv2.imread(path, cv2.IMREAD_COLOR)
@@ -274,7 +267,7 @@ def write_image(path, img):
     cv2.imwrite(path, img)
 
 def preprocess(img):
-    img = img[...,::,-1]
+    img = img[...,::-1]
     img = img[np.newaxis, :, :, :]
     img -= np.array([123.68, 116.779, 103.939]).reshape((1, 1, 1, 3))
     return img
@@ -413,11 +406,107 @@ def get_init_image(init_type, content_img, style_imgs, frame=None):
         return style_imgs[0]
     elif init_type == 'random':
         return get_noise_image(noise_ratio, content_img)
+
+def get_content_image(content_img):
+    path = os.path.join(content_img_dir, content_img)    
+    img = cv2.imread(path, cv2.IMREAD_COLOR)
+    check_image(img, path)
+    img = img.astype(np.float32)
+    h, w, d = img.shape
+    mx = max_size
     
+    if h > w and h > mx:
+        w = (float(mx) / float(h)) * w
+        img = cv2.resize(img, dsize=(int(w), mx), interpolation=cv2.INTER_AREA)
+    if w > mx:
+        h = (float(mx) / float(w)) * h
+        img = cv2.resize(img, dsize=(mx, int(h)), interpolation=cv2.INTER_AREA)
+    img = preprocess(img)
+    return img
 
+def get_style_images(content_img):
+    _, ch,cw,cd = content_img.shape
+    style_imgs_array = []
+    for style_fn in style_imgs_name:
+        path = os.path.join(style_imgs_dir, style_fn)
+        
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        check_image(img, path)
+        img = img.astype(np.float32)
+        img = cv2.resize(img, dsize=(cw, ch), interpolation=cv2.INTER_AREA)
+        img = preprocess(img)
+        style_imgs_array.append(img)
+    return style_imgs_array
 
+def get_noise_image(noise_ratio, content_img):
+    np.random.seed(seed)
+    noise_img = np.random.uniform(-20., 20., content_img.shape).astype(np.float32)
+    img = noise_ratio * noise_img + (1.-noise_ratio) * content_img
+    return img
 
+def get_mask_image(mask_img, width, height):
+    path = os.path.join(content_img_dir, mask_img)
+    img = cv2.imread(path, cv2.IMREADIMREAD_GRAYSCALE)
+    check_image(img, path)
+    img = cv2.resize(img, dsize=(width, height), interpolation=cv2.INTER_AREA)
+    img = img.astype(np.float32)
+    mx = np.amax(img)
+    img /= mx
+    return img
 
+def wrap_image(src, flow):
+    _, h, w = flow.shape
+    flow_map = np.zeros(flow.shape, dtype=np.float32)
+    for y in range(h):
+        flow_map[1, y, :] = float(y) + flow[1, y, :]
+    for x in range(w):
+        flow_map[0, :, x] = float(x) + flow[0, :, x]
+    
+    dst = cv2.remap(src, flow_map[0], flow_map[1], interpolation = cv2.INTER_CUBIC, borderMode=cv2.BORDER_TRANSPARENT)
+    return dst
+
+def convert_to_original_colors(content_img, stylized_img):
+    content_img = postprocess(content_img)
+    stylized_img = postprocess(stylized_img)
+    if color_convert_type == 'yuv':
+        cvt_type = cv2.COLOR_BGR2YUV
+        inv_cvt_type = cv2.COLOR_YUV2BGR
+    elif color_convert_type == 'ycrcb':
+        cvt_type == cv2.COLOR_BGR2YCR_CB
+        inv_cvt_type == cv2.COLOR_YCR_CB2BGR
+    elif color_convert_type == 'luv':
+        cvt_type == cv2.COLOR_BGR2LUV
+        inv_cvt_type == cv2.COLOR_LUV2BGR
+    elif color_convert_type == 'lab':
+        cvt_type = cv2.COLOR_BGR2LAB
+        inv_cvt_type = cv2.COLOR_LAB2BGR
+    
+    content_cvt = cv2.cvtColor(content_img, cvt_type)
+    stylized_cvt = cv2.cvtColor(stylized_img, cvt_type)
+    c1, _, _ = cv2.split(stylized_cvt)
+    _, c2, c3 = cv2.split(content_cvt)
+    merged = cv2.merge((c1, c2, c3))
+    dst = cv2.cvtColor(merged, inv_cvt_type).astype(np.float32)
+    dst = preprocess(dst)
+    return dst
+
+def render_single_image():
+    content_img = get_content_image(content_img_name)
+    style_imgs = get_style_images(content_img)
+    with tf.Graph().as_default():
+        init_img = get_init_image(init_img_type, content_img, style_imgs)
+        tick = time.time()
+        stylize(content_img, style_imgs, init_img)
+        tock = time.time()
+        
+def main():
+    handleParameter()
+    render_single_image()
+    
+    
+    
+    
+    
     
     
     
