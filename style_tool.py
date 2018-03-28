@@ -9,7 +9,7 @@ import os
 import cv2
 
 #'/gpu:0' /cpu:0 ...
-device = '/cpu:0'
+device = '/gpu:0'
 
 #'max'
 pool_args = 'avg'
@@ -19,21 +19,21 @@ style_mask_imgs = None
 content_layers = ['conv4_2']
 style_layers = ['relu1_1', 'relu2_1', 'relu3_1', 'relu4_1', 'relu5_1']
 
-global content_layer_weights
+
 content_layer_weights = [1.0]
 
-global style_layer_weights
 style_layer_weights = [0.2, 0.2, 0.2, 0.2, 0.2]
 
-global style_imgs_weights
 style_imgs_weights = [1.0]
+
 
 model_weights = 'imagenet-vgg-verydeep-19.mat'
 style_mask = False
 
-original_colors = False
+original_colors = True
 
-max_iterations = 1000
+#1000
+max_iterations = 100
 print_iterations  = 50
 learning_rate = 1e0
 
@@ -65,12 +65,17 @@ color_convert_type = 'yuv'
 #['random', 'content', 'style']
 init_img_type = 'content'
 
+sucess_style_path = ''
+
 #content_weights_frmt = 'reliable_{}_{}.txt'
 #forward_optical_flow_frmt = 'forward_{}_{}.flo'
 #backward_optical_flow_frmt = 'backward_{}_{}.flo'
 #content_frame_frmt = 'frame_{}.ppm'
 
 def handleParameter(): 
+    global sucess_style_path
+    sucess_style_path = ''
+    
     global style_layer_weights
     style_layer_weights = normalize(style_layer_weights)
     global content_layer_weights
@@ -84,11 +89,12 @@ def build_model(input_img):
     net = {}
     _, h, w, d = input_img.shape
     
+    print('loading model weights')
     vgg_rawnet = scipy.io.loadmat(model_weights)
     vgg_layers = vgg_rawnet['layers'][0]
     net['input'] = tf.Variable(np.zeros((1, h, w, d), dtype=np.float32))
     
-    #Layer Group 1
+    print('LAYER GROUP 1')
     net['conv1_1'] = conv_layer('conv1_1', net['input'], W = get_weights(vgg_layers, 0))
     net['relu1_1'] = relu_layer('relu1_1', net['conv1_1'], b = get_bias(vgg_layers, 0))
     
@@ -97,7 +103,7 @@ def build_model(input_img):
     
     net['pool1'] = pool_layer('pool1', net['relu1_2'])
     
-    #Layer Group 2
+    print('LAYER GROUP 2')
     net['conv2_1'] = conv_layer('conv_2_1', net['pool1'], W = get_weights(vgg_layers, 5))
     net['relu2_1'] = relu_layer('relu2_1', net['conv2_1'], b = get_bias(vgg_layers, 5))
     
@@ -106,7 +112,7 @@ def build_model(input_img):
 
     net['pool2'] = pool_layer('pool2', net['relu2_2'])
     
-    #Layer Group 3
+    print('LAYER GROUP 3')
     net['conv3_1'] = conv_layer('conv3_1', net['pool2'], W=get_weights(vgg_layers, 10))
     net['relu3_1'] = relu_layer('relu3_1', net['conv3_1'], b=get_bias(vgg_layers, 10))
 
@@ -121,7 +127,7 @@ def build_model(input_img):
 
     net['pool3']   = pool_layer('pool3', net['relu3_4'])
     
-    #Layer Group 4
+    print('LAYER GROUP 4')
     net['conv4_1'] = conv_layer('conv4_1', net['pool3'], W=get_weights(vgg_layers, 19))
     net['relu4_1'] = relu_layer('relu4_1', net['conv4_1'], b=get_bias(vgg_layers, 19))
 
@@ -136,7 +142,7 @@ def build_model(input_img):
 
     net['pool4']   = pool_layer('pool4', net['relu4_4'])   
     
-    #Layer Group 5
+    print('LAYER GROUP 5')
     net['conv5_1'] = conv_layer('conv5_1', net['pool4'], W=get_weights(vgg_layers, 28))
     net['relu5_1'] = relu_layer('relu5_1', net['conv5_1'], b=get_bias(vgg_layers, 28))
 
@@ -155,10 +161,14 @@ def build_model(input_img):
     
 def conv_layer(layer_name, layer_input, W):
     conv = tf.nn.conv2d(layer_input, W, strides = [1, 1, 1, 1], padding = 'SAME')
+    print('--{} | shape={} | weights_shape={}'.format(layer_name, 
+    conv.get_shape(), W.get_shape()))
     return conv
 
 def relu_layer(layer_name, layer_input, b):
     relu = tf.nn.relu(layer_input + b)
+    print('--{} | shape={} | bias_shape={}'.format(layer_name, relu.get_shape(), 
+      b.get_shape()))
     return relu
 
 def pool_layer(layer_name, layer_input):
@@ -168,6 +178,7 @@ def pool_layer(layer_name, layer_input):
     elif pool_args == 'max':
         pool = tf.nn.max_pool(layer_input, ksize=[1, 2, 2, 1],
                               strides=[1, 2, 2, 1], padding='SAME')
+    print('--{}   | shape={}'.format(layer_name, pool.get_shape()))
     return pool
 
 def get_weights(vgg_layers, i):
@@ -223,8 +234,10 @@ def mask_style_layer(a, x, mask_img):
     
 def sum_masked_style_losses(sess, net, style_imgs):
     total_style_loss = 0.
+    
     weights = style_imgs_weights
     masks = style_mask_imgs
+    
     for img, img_weight, img_mask in zip(style_imgs, weights, masks):
         sess.run(net['input'].assign(img))
         style_loss = 0.
@@ -241,7 +254,10 @@ def sum_masked_style_losses(sess, net, style_imgs):
 
 def sum_style_losses(sess, net, style_imgs):
     total_style_loss = 0.
+    
     weights = style_imgs_weights
+    
+    
     for img, img_weight in zip(style_imgs, weights):
         sess.run(net['input'].assign(img))
         style_loss = 0.
@@ -258,6 +274,7 @@ def sum_style_losses(sess, net, style_imgs):
 def sum_content_losses(sess, net, content_img):
     sess.run(net['input'].assign(content_img))
     content_loss = 0.
+    
     for layer, weight in zip(content_layers, content_layer_weights):
         p = sess.run(net[layer])
         x = net[layer]
@@ -353,11 +370,12 @@ def stylize(content_img, style_imgs, init_img, frame=None):
         L_total += beta * L_style
         L_total += theta * L_tv
         
-        optimizer = get_optimizer(L_total)
+        opt = get_optimizer(L_total)
+        
         if optimizer == 'adam':
-            minimize_with_adam(sess, net, optimizer, init_img, L_total)
+            minimize_with_adam(sess, net, opt, init_img, L_total)
         elif optimizer == 'lbfgs':
-            minimize_with_lbfgs(sess, net, optimizer, init_img)
+            minimize_with_lbfgs(sess, net, opt, init_img)
             
         output_img = sess.run(net['input'])
         
@@ -367,12 +385,14 @@ def stylize(content_img, style_imgs, init_img, frame=None):
         write_image_output(output_img, content_img, style_imgs, init_img)
         
 def minimize_with_lbfgs(sess, net, optimizer, init_img):
+    print('\nMINIMIZING LOSS USING: L-BFGS OPTIMIZER')
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
     sess.run(net['input'].assign(init_img))
     optimizer.minimize(sess)
         
 def minimize_with_adam(sess, net, optimizer, init_img, loss):
+    print('\nMINIMIZING LOSS USING: ADAM OPTIMIZER')
     train_op = optimizer.minimize(loss)
     init_op = tf.global_variables_initializer()
     sess.run(init_op)
@@ -399,6 +419,10 @@ def write_image_output(output_img, content_img, style_imgs, init_img):
     out_dir = os.path.join(img_output_dir, img_name)
     make_directory(out_dir)
     img_path = os.path.join(out_dir, img_name + '.png')
+    print(img_path)
+    global sucess_style_path
+    sucess_style_path = img_path
+    
     content_path = os.path.join(out_dir, 'content.png')
     init_path = os.path.join(out_dir, 'init.png')
     
@@ -507,9 +531,11 @@ def render_single_image():
     style_imgs = get_style_images(content_img)
     with tf.Graph().as_default():
         init_img = get_init_image(init_img_type, content_img, style_imgs)
+        print('\n---- RENDERING SINGLE IMAGE ----\n')
         tick = time.time()
         stylize(content_img, style_imgs, init_img)
         tock = time.time()
+        print('Single image elapsed time: {}'.format(tock - tick))
 
 def checkPath():
     if len(style_imgs_name) > 0 and style_imgs_dir and  content_img_dir and content_img_name and img_output_dir:

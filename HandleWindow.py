@@ -8,6 +8,8 @@ import sys
 import cv2
 import numpy as np
 import os
+import threading
+import time
 
 class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
@@ -28,7 +30,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         style_tool.check_image(img, str(fname[0]))
         
         self.lab_originalImg.setStyleSheet("")
-        self.lab_originalImg.setPixmap(self.Conv_CV2QPixmap(img))
+        self.lab_originalImg.setPixmap(self.Conv_CV2QPixmap(img, self.lab_originalImg.width(), self.lab_originalImg.height()))
         
         style_tool.content_img_dir = os.path.split(str(fname[0]))[0]
         style_tool.content_img_name = os.path.split(str(fname[0]))[1]
@@ -45,7 +47,6 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         for i in fname[0]:
             style_tool.style_imgs_name.append(os.path.split(str(i))[1])
             
-                
             
     def ConvertToStyle(self):
         dir_path = QFileDialog.getExistingDirectory(self, "Save Directory", "C:\\")
@@ -53,21 +54,32 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         style_tool.img_name = 'styles'
         
         if style_tool.checkPath():
+            self.lab_style_img.setStyleSheet("")
             style_tool.handleParameter()
+            threading.Thread(target=self.isNeuralStyleSuccess).start()
             style_tool.render_single_image()
     
-    def Conv_CV2QPixmap(self, img):
+    def Conv_CV2QPixmap(self, img, width, height):
         h, w, d = img.shape
         bytesPerLine = 3 * w
         qImg = QImage(img.data, w, h, bytesPerLine, QImage.Format_RGB888)
         qPix = QPixmap.fromImage(qImg)
         
-        lw = self.lab_originalImg.width()
-        lh = self.lab_originalImg.height()
-        return qPix.scaled(lw, lh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        return qPix.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     
     def SplitPathAndName(self, path):
         pass
+    
+    def isNeuralStyleSuccess(self):
+        while style_tool.sucess_style_path == '':
+            time.sleep(1)
+            continue
+        print('Success!!')
+        fname = style_tool.sucess_style_path
+        img = cv2.imread(fname, cv2.IMREAD_COLOR)
+        self.lab_style_img.setPixmap(self.Conv_CV2QPixmap(img, self.lab_style_img.width(), self.lab_style_img.height()))
+        
+            
     
 if __name__ == '__main__':
     app = QApplication(sys.argv)
