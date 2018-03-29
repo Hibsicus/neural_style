@@ -41,6 +41,8 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         style_tool.style_imgs_name = []
         
+        self.lab_styleImg_multi.setPixmap(self.ShowMultiPixmap(fname[0]))
+        
         path_name = os.path.split(str(fname[0][0]))[0]
         style_tool.style_imgs_dir = path_name
         
@@ -67,8 +69,28 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         
         return qPix.scaled(width, height, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     
-    def SplitPathAndName(self, path):
-        pass
+    def ShowMultiPixmap(self, paths):
+        pix = QPixmap(512, 128)
+        pix.fill(Qt.transparent)
+        painter = QPainter(pix)
+        painter.begin(self)
+        
+        total = len(paths)
+        print('lengths of %i' % (total))
+        if total <= 4:
+            for i in range(len(paths)):
+                print(i)
+                img = cv2.imread(str(paths[i]), cv2.IMREAD_COLOR)
+                painter.drawPixmap((128 * i), 0, 128, 128, self.Conv_CV2QPixmap(img , 128,128 ))
+        else:
+            for i in range(len(paths)):
+                img = cv2.imread(str(paths[i]), cv2.IMREAD_COLOR)
+                painter.drawPixmap(i * (512 / (len(paths))), 0, 512 / (len(paths)), 128, self.Conv_CV2QPixmap(img ,512 / (len(paths)),128 ))
+        
+        painter.end()
+        
+        return pix
+    
     
     def isNeuralStyleSuccess(self):
         while style_tool.sucess_style_path == '':
