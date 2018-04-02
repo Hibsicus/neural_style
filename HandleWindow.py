@@ -16,11 +16,44 @@ class MainWindow(QMainWindow, Ui_MainWindow):
         super(MainWindow, self).__init__(parent)
         self.setupUi(self)
         self.setupBtnClick()
+        self.setupCombo()
+        
+        
     
     def setupBtnClick(self):
         self.btn_inputImage.clicked.connect(self.ImportImageAndShowPath)
         self.btn_styles_convert.clicked.connect(self.ConvertToStyle)
         self.btn_inputStyle.clicked.connect(self.ImportStyleImage)
+    
+    def setupCombo(self):
+        self.Device_Combo.currentIndexChanged.connect(self.HandleDevice)
+        self.InitImageType_Combo.currentIndexChanged.connect(self.HandleImageType)
+        self.ColorConvertType_Combo.currentIndexChanged.connect(self.HandleColorConvertType)
+        self.content_loss_func_combo.currentIndexChanged.connect(self.HandleLossFunction)
+        self.pool_args_combo.currentIndexChanged.connect(self.HandlePoolArgs)
+        self.optimizer_combo.currentIndexChanged.connect(self.HandleOpt)
+        
+    def HandleOpt(self, i):
+        style_tool.optimizer = self.optimizer_combo.currentText()
+        
+    def HandlePoolArgs(self, i):
+        style_tool.pool_args = self.pool_args_combo.currentText()
+    
+    def HandleLossFunction(self, i):
+        style_tool.content_loss_function = int(self.content_loss_func_combo.currentText())
+    
+    def HandleColorConvertType(self, i):
+        style_tool.color_convert_type = self.ColorConvertType_Combo.currentText()
+    
+    
+    def HandleDevice(self, i):
+        if i == 0:
+            style_tool.device = '/cpu:0'
+        else:
+            style_tool.device = '/gpu:0'
+    
+    def HandleImageType(self, i):
+        style_tool.init_img_type = self.InitImageType_Combo.currentText()
     
     def ImportImageAndShowPath(self):
         fname = QFileDialog.getOpenFileName(self, 'ImportImage', 'c:\\', 'Image files(*.png *.jpg *.jpeg)')
@@ -50,7 +83,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
             style_tool.style_imgs_name.append(os.path.split(str(i))[1])
             
             
-    def ConvertToStyle(self):
+    def ConvertToStyle(self):      
         dir_path = QFileDialog.getExistingDirectory(self, "Save Directory", "C:\\")
         style_tool.img_output_dir = str(dir_path)
         style_tool.img_name = 'styles'
