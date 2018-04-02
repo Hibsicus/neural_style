@@ -64,6 +64,7 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def Conv_CV2QPixmap(self, img, width, height):
         h, w, d = img.shape
         bytesPerLine = 3 * w
+        cv2.cvtColor(img, cv2.COLOR_BGR2RGB, img)
         qImg = QImage(img.data, w, h, bytesPerLine, QImage.Format_RGB888)
         qPix = QPixmap.fromImage(qImg)
         
