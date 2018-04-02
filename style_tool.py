@@ -43,7 +43,7 @@ tv_weight = 1e-3
 temporal_weight = 2e2
 
 img_output_dir = 'D:'
-img_name = "test"
+img_name = ""
 content_img_dir = 'D:'
 content_img_name = 'name.png'
 
@@ -538,7 +538,7 @@ def render_single_image():
         print('Single image elapsed time: {}'.format(tock - tick))
 
 def checkPath():
-    if len(style_imgs_name) > 0 and style_imgs_dir and  content_img_dir and content_img_name and img_output_dir:
+    if len(style_imgs_name) > 0 and style_imgs_dir and  content_img_dir and content_img_name and img_output_dir and img_name:
         return True
     return False
 
