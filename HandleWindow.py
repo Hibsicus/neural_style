@@ -15,12 +15,83 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def __init__(self, parent=None):
         super(MainWindow, self).__init__(parent)
         self.setupUi(self)
+        
         self.setupBtnClick()
-    
+        self.setupCombo()
+        self.setupCheck()
+        self.setupValueEdit()
+        self.setupLineText()
+        
+    def setupLineText(self):
+        self.outname_line.textChanged.connect(self.HandleOutputName)
+        
+    def setupValueEdit(self):
+        self.iteration_spin.valueChanged.connect(self.HandleIteration)
+        self.learingrate_doubleSpin.valueChanged.connect(self.HandleLearningRate)
+        self.maxSize_spin.valueChanged.connect(self.HandleMaxSize)
+        
     def setupBtnClick(self):
         self.btn_inputImage.clicked.connect(self.ImportImageAndShowPath)
         self.btn_styles_convert.clicked.connect(self.ConvertToStyle)
         self.btn_inputStyle.clicked.connect(self.ImportStyleImage)
+    
+    def setupCombo(self):
+        self.Device_Combo.currentIndexChanged.connect(self.HandleDevice)
+        self.InitImageType_Combo.currentIndexChanged.connect(self.HandleImageType)
+        self.ColorConvertType_Combo.currentIndexChanged.connect(self.HandleColorConvert)
+        self.content_loss_func_combo.currentIndexChanged.connect(self.HandleLossFunction)
+        self.pool_args_combo.currentIndexChanged.connect(self.HandlePoolArgs)
+        self.optimizer_combo.currentIndexChanged.connect(self.HandleOpt)
+        
+    def setupCheck(self):
+        self.stylemask_check.stateChanged.connect(self.HandleStyleMask)
+        self.originalColor_check.stateChanged.connect(self.HandleOriginalColor)
+    
+    def HandleOutputName(self, text):
+        style_tool.img_name = text
+    
+    def HandleMaxSize(self):
+        style_tool.max_size = self.maxSize_spin.value()
+    
+    def HandleLearningRate(self):
+        style_tool.learning_rate = self.learingrate_doubleSpin.value()
+    
+    def HandleIteration(self):
+        style_tool.max_iterations = self.iteration_spin.value()
+    
+    def HandleStyleMask(self, state):
+        if state == Qt.Checked:
+            style_tool.style_mask = True
+        else:
+            style_tool.style_mask = False
+    
+    def HandleOriginalColor(self, state):
+        if state == Qt.Checked:
+            style_tool.original_colors = True
+        else:
+            style_tool.original_colors = False
+        
+    def HandleOpt(self, i):
+        style_tool.optimizer = self.optimizer_combo.currentText()
+        
+    def HandlePoolArgs(self, i):
+        style_tool.pool_args = self.pool_args_combo.currentText()
+        
+    def HandleLossFunction(self, i):
+        style_tool.content_loss_function = i + 1
+        
+    
+    def HandleColorConvert(self, i):
+        style_tool.color_convert_type = self.ColorConvertType_Combo.currentText()
+        
+    def HandleImageType(self, i):
+        style_tool.init_img_type = self.InitImageType_Combo.currentText()
+        
+    def HandleDevice(self, i):
+        if self.Device_Combo.currentIndex == 0:
+            style_tool.device = '/cpu:0'
+        else:
+            style_tool.device = '/gpu:0'
     
     def ImportImageAndShowPath(self):
         fname = QFileDialog.getOpenFileName(self, 'ImportImage', 'c:\\', 'Image files(*.png *.jpg *.jpeg)')
@@ -37,6 +108,17 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     
     def ImportStyleImage(self):
         fname = QFileDialog.getOpenFileNames(self, 'ImportImage', 'c:\\', 'Image files(*.png *.jpg *.jpeg)')
+        
+        if len(fname[0]) > 0:
+            self.line_styleImgWeights.setEnabled(True)
+        else:
+            self.line_styleImgWeights.setEnabled(False)
+        
+        if len(fname[0]) > 1:
+            self.stylemask_check.setEnabled(True)
+        else:
+            self.stylemask_check.setEnabled(False)
+        
         self.edit_styleInput.setText(str(fname[0]))
         
         style_tool.style_imgs_name = []
