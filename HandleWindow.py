@@ -135,13 +135,13 @@ class MainWindow(QMainWindow, Ui_MainWindow):
     def ConvertToStyle(self):
         dir_path = QFileDialog.getExistingDirectory(self, "Save Directory", "C:\\")
         style_tool.img_output_dir = str(dir_path)
-        style_tool.img_name = 'styles'
+#        style_tool.img_name = 'styles'
         
         if style_tool.checkPath():
             self.lab_style_img.setStyleSheet("")
             style_tool.handleParameter()
             threading.Thread(target=self.isNeuralStyleSuccess).start()
-            style_tool.render_single_image()
+            threading.Thread(target=style_tool.render_single_image).start()
     
     def Conv_CV2QPixmap(self, img, width, height):
         h, w, d = img.shape
